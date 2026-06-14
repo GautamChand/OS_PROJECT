@@ -1,0 +1,132 @@
+{% extends 'base.html' %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="page-header animate-fade-in">
+    <div>
+        <h1 class="page-title">Storage Optimizer Dashboard</h1>
+        <p class="page-subtitle">Demonstrating Smart File System Monitoring & Dynamic Compression</p>
+    </div>
+    <div class="header-actions">
+        <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode">
+            <span class="icon-sun">☀️</span>
+            <span class="icon-moon">🌙</span>
+        </button>
+        <button class="btn btn-primary" id="btnChangeFolder">📁 Change Folder</button>
+    </div>
+</div>
+
+<!-- Folder Info Section -->
+<div class="glass-card" style="margin-bottom: 24px; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+    <div style="display: flex; align-items: center; gap: 12px;">
+        <span style="font-size: 24px;">📁</span>
+        <div>
+            <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; color: var(--text-muted);">Currently Monitoring</div>
+            <div id="currentFolderPathText" style="font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--text-primary);">Scanning...</div>
+        </div>
+    </div>
+    <div style="display: flex; gap: 8px;">
+        <button class="btn btn-secondary btn-sm" id="btnScanNow">⚡ Scan Now</button>
+        <button class="btn btn-secondary btn-sm" id="btnRunScheduler">⚙️ Run Scheduler</button>
+        <button class="btn btn-secondary btn-sm" id="btnRunSimulation">🔍 Run Simulation</button>
+    </div>
+</div>
+
+<!-- Stats Grid -->
+<div class="stats-grid">
+    <div class="stat-card primary">
+        <div class="stat-icon">📁</div>
+        <div class="stat-value" id="statTotalFiles">0</div>
+        <div class="stat-label">Total Scanned Files</div>
+    </div>
+    <div class="stat-card accent">
+        <div class="stat-icon">💾</div>
+        <div class="stat-value" id="statTotalSize">0 Bytes</div>
+        <div class="stat-label">Original Uncompressed Size</div>
+    </div>
+    <div class="stat-card success">
+        <div class="stat-icon">🗜️</div>
+        <div class="stat-value" id="statSavedSize">0 Bytes</div>
+        <div class="stat-label">Optimized Space Saved</div>
+    </div>
+    <div class="stat-card warm">
+        <div class="stat-icon">📈</div>
+        <div class="stat-value" id="statSavingsRatio">0.0%</div>
+        <div class="stat-label">Average Space Efficiency</div>
+    </div>
+</div>
+
+<!-- Main Dashboard Grid -->
+<div class="dashboard-grid">
+    <!-- Left Column -->
+    <div style="display: flex; flex-direction: column; gap: 24px;">
+        <!-- Optimization progress -->
+        <div class="glass-card">
+            <h3 class="card-title" style="margin-bottom: 12px;">Overall Storage Compression Status</h3>
+            <div class="progress-container">
+                <div class="progress-label">
+                    <span id="dashboardProgressLabel">0% Space Optimized</span>
+                    <span>Goal: Maximize Free Space</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="dashboardProgressFill" style="width: 0%;"></div>
+                </div>
+            </div>
+            <p style="font-size: 12px; color: var(--text-muted); margin-top: 8px;">
+                The system dynamically prioritizes compressing files categorized as cold or archive to maximize disk space while ensuring hot files remain uncompressed for immediate, fast access.
+            </p>
+        </div>
+
+        <!-- Drag & Drop / Upload -->
+        <div class="glass-card dropzone" id="dropzone" style="border: 2px dashed var(--border-glass); text-align: center; padding: 40px 20px; cursor: pointer; transition: all var(--transition-base);">
+            <div style="font-size: 48px; margin-bottom: 12px; transition: transform var(--transition-bounce);">📥</div>
+            <h3 class="card-title">Drag & Drop Folder to Monitor</h3>
+            <p style="color: var(--text-secondary); font-size: 13px; margin-top: 4px; max-width: 400px; margin-left: auto; margin-right: auto;">
+                Drop any local directory here to swap the active monitor path. The background watcher will immediately start tracking access metadata and training prediction models.
+            </p>
+        </div>
+
+        <!-- Recommendations -->
+        <div class="glass-card">
+            <div class="card-header">
+                <h3 class="card-title">💡 Smart Compression Recommendations</h3>
+                <span style="font-size: 11px; font-weight:600; color: var(--primary-light); background: rgba(102,126,234,0.1); padding: 4px 8px; border-radius: var(--radius-full);">AI Enabled</span>
+            </div>
+            <div id="recommendationsContainer">
+                <div style="text-align: center; padding: 20px; color: var(--text-muted);">Loading recommendations...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right Column -->
+    <div style="display: flex; flex-direction: column; gap: 24px;">
+        <!-- Temperature Distribution Chart -->
+        <div class="glass-card" style="display: flex; flex-direction: column; min-height: 340px;">
+            <h3 class="card-title" style="margin-bottom: 15px;">🌡️ File Heat Distribution</h3>
+            <div style="flex: 1; position: relative; min-height: 200px;">
+                <canvas id="temperatureChartCanvas"></canvas>
+            </div>
+            <div style="font-size: 11px; color: var(--text-muted); text-align: center; margin-top: 12px;">
+                Based on access frequency and recency. Hot/Warm = uncompressed; Cold/Archive = compressed.
+            </div>
+        </div>
+
+        <!-- Recent Activity Feed -->
+        <div class="glass-card" style="display: flex; flex-direction: column; min-height: 360px;">
+            <div class="card-header">
+                <h3 class="card-title">⏱️ Recent Activity</h3>
+            </div>
+            <div id="activityLogContainer" style="flex: 1; overflow-y: auto; max-height: 280px; padding-right: 4px;">
+                <div style="text-align: center; padding: 20px; color: var(--text-muted);">Loading activity log...</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/dragdrop.js') }}"></script>
+<script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+{% endblock %}

@@ -1,0 +1,274 @@
+{% extends 'base.html' %}
+
+{% block title %}Storage Analytics{% endblock %}
+
+{% block content %}
+<div class="page-header animate-fade-in">
+    <div>
+        <h1 class="page-title">Advanced Storage Analytics</h1>
+        <p class="page-subtitle">File pattern statistics, compression performance, and Machine Learning access prediction</p>
+    </div>
+    <div class="header-actions">
+        <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode">
+            <span class="icon-sun">☀️</span>
+            <span class="icon-moon">🌙</span>
+        </button>
+        <button class="btn btn-primary" id="btnTrainModel">🧠 Train ML Model</button>
+    </div>
+</div>
+
+<!-- Grid 1: Storage Timeline & File Types -->
+<div class="dashboard-grid">
+    <!-- Storage Savings Timeline -->
+    <div class="glass-card" style="display: flex; flex-direction: column; min-height: 380px;">
+        <h3 class="card-title" style="margin-bottom: 15px;">💾 Storage Optimization Timeline</h3>
+        <div style="flex: 1; position: relative; min-height: 250px;">
+            <canvas id="storageTimelineCanvas"></canvas>
+        </div>
+    </div>
+    
+    <!-- File Type Distribution -->
+    <div class="glass-card" style="display: flex; flex-direction: column; min-height: 380px;">
+        <h3 class="card-title" style="margin-bottom: 15px;">📁 File Categories</h3>
+        <div style="flex: 1; position: relative; min-height: 250px;">
+            <canvas id="fileTypesCanvas"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Grid 2: Access Frequency & Compression Efficiency -->
+<div class="dashboard-grid">
+    <!-- Access Frequency -->
+    <div class="glass-card" style="display: flex; flex-direction: column; min-height: 380px;">
+        <h3 class="card-title" style="margin-bottom: 15px;">📊 Top 10 Frequently Accessed Files</h3>
+        <div style="flex: 1; position: relative; min-height: 250px;">
+            <canvas id="accessFrequencyCanvas"></canvas>
+        </div>
+    </div>
+    
+    <!-- Compression Efficiency by Algorithm -->
+    <div class="glass-card" style="display: flex; flex-direction: column; min-height: 380px;">
+        <h3 class="card-title" style="margin-bottom: 15px;">⚙️ Compression Savings by Algorithm</h3>
+        <div style="flex: 1; position: relative; min-height: 250px;">
+            <canvas id="efficiencyCanvas"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- ML Predictions and Model Status -->
+<div class="glass-card" style="margin-bottom: 28px;">
+    <div class="card-header" style="flex-wrap: wrap; gap: 12px;">
+        <div>
+            <h3 class="card-title">🧠 Machine Learning Access Predictions</h3>
+            <p class="card-subtitle">Random Forest Classifier predicting file access probabilities and scheduling auto-compressions</p>
+        </div>
+        <div class="status-badge" id="mlModelStatus" style="font-weight: 500;">
+            Model Status: Loading...
+        </div>
+    </div>
+    
+    <div style="overflow-x: auto; margin-top: 15px;">
+        <table class="file-table" style="width: 100%; border-collapse: collapse; text-align: left; font-size: 13px;">
+            <thead>
+                <tr style="border-bottom: 1px solid var(--border-glass); color: var(--text-secondary);">
+                    <th style="padding: 12px 10px;">Filename</th>
+                    <th style="padding: 12px 10px;">Type</th>
+                    <th style="padding: 12px 10px;">Size</th>
+                    <th style="padding: 12px 10px;">Accesses</th>
+                    <th style="padding: 12px 10px;">Access Probability</th>
+                    <th style="padding: 12px 10px;">ML Verdict</th>
+                </tr>
+            </thead>
+            <tbody id="predictionsTableBody">
+                <tr>
+                    <td colspan="6" style="padding: 20px; text-align: center; color: var(--text-muted);">Fetching ML predictions...</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- OS Concepts Demonstrations -->
+<div class="glass-card" style="margin-bottom: 28px;">
+    <h3 class="card-title" style="margin-bottom: 16px;">🎓 Operating Systems Concepts Demonstrated</h3>
+    <div class="dashboard-grid-3" id="osConceptsContainer" style="margin-bottom: 0;">
+        <!-- Filled dynamically by JavaScript -->
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    loadAnalyticsData();
+    loadOSConcepts();
+    setupMLTrainButton();
+});
+
+async function loadAnalyticsData() {
+    try {
+        // 1. Storage Timeline
+        const timeline = await API.get('/api/analytics/storage-timeline');
+        if (timeline && timeline.length > 0) {
+            const labels = timeline.map(t => new Date(t.recorded_at).toLocaleDateString() + ' ' + new Date(t.recorded_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}));
+            const originalSizes = timeline.map(t => t.total_size / (1024 * 1024)); // MB
+            const optimizedSizes = timeline.map(t => t.compressed_size / (1024 * 1024)); // MB
+            createStorageTimeline('storageTimelineCanvas', labels, originalSizes, optimizedSizes);
+        } else {
+            // Render placeholder or empty chart
+            createStorageTimeline('storageTimelineCanvas', ['No Data'], [0], [0]);
+        }
+        
+        // 2. File Type Distribution
+        const types = await API.get('/api/analytics/file-types');
+        if (types && types.length > 0) {
+            const labels = types.map(t => t.file_category);
+            const data = types.map(t => t.count);
+            createFileTypeChart('fileTypesCanvas', labels, data);
+        } else {
+            createFileTypeChart('fileTypesCanvas', ['None'], [0]);
+        }
+        
+        // 3. Access Frequency
+        const frequency = await API.get('/api/analytics/access-frequency');
+        if (frequency && frequency.most_accessed && frequency.most_accessed.length > 0) {
+            const labels = frequency.most_accessed.map(f => f.filename);
+            const data = frequency.most_accessed.map(f => f.access_count);
+            createAccessChart('accessFrequencyCanvas', labels, data);
+        } else {
+            createAccessChart('accessFrequencyCanvas', ['No Accesses Recorded'], [0]);
+        }
+        
+        // 4. Compression Efficiency by Algorithm
+        const efficiency = await API.get('/api/analytics/compression-efficiency');
+        if (efficiency && efficiency.length > 0) {
+            const labels = efficiency.map(e => e.algorithm);
+            const ratios = efficiency.map(e => e.avg_savings_percent);
+            createEfficiencyChart('efficiencyCanvas', labels, ratios);
+        } else {
+            // Default placeholders for standard algorithms
+            createEfficiencyChart('efficiencyCanvas', ['zlib', 'bz2', 'huffman'], [0, 0, 0]);
+        }
+        
+        // 5. ML Predictions Table
+        loadMLPredictions();
+        
+    } catch (error) {
+        console.error("Error loading analytics data:", error);
+    }
+}
+
+async function loadMLPredictions() {
+    const tableBody = document.getElementById('predictionsTableBody');
+    const modelStatus = document.getElementById('mlModelStatus');
+    
+    try {
+        const data = await API.get('/api/analytics/predictions');
+        
+        // Status Badge
+        if (modelStatus) {
+            const isTrained = data.model_status.is_trained;
+            modelStatus.innerHTML = `Model Status: <span class="status-dot ${isTrained ? '' : 'inactive'}" style="display:inline-block; margin-right:4px;"></span> ${isTrained ? 'Trained' : 'Untrained (Fallback Rule-based)'}`;
+        }
+        
+        if (!data.predictions || data.predictions.length === 0) {
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="6" style="padding: 20px; text-align: center; color: var(--text-muted);">No uncompressed files found. All files optimized.</td>
+                </tr>
+            `;
+            return;
+        }
+        
+        tableBody.innerHTML = data.predictions.map(pred => {
+            const prob = pred.prediction_probability || 0;
+            const probPct = (prob * 100).toFixed(1) + '%';
+            
+            let verdict = '❄️ Keep Compressed';
+            let verdictClass = 'color: var(--accent-green);';
+            
+            if (pred.should_compress === false || prob > 0.3) {
+                verdict = '🔥 Keep Uncompressed (Hot File)';
+                verdictClass = 'color: var(--temp-hot); font-weight: 600;';
+            }
+            
+            return `
+                <tr style="border-bottom: 1px solid var(--border-subtle); hover: background-color: var(--bg-glass-hover);">
+                    <td style="padding: 12px 10px; font-family: 'JetBrains Mono', monospace; font-size:12px;">${pred.filename}</td>
+                    <td style="padding: 12px 10px; text-transform: capitalize;">${pred.file_category}</td>
+                    <td style="padding: 12px 10px;">${UI.formatBytes(pred.original_size)}</td>
+                    <td style="padding: 12px 10px; text-align:center;">${pred.access_count}</td>
+                    <td style="padding: 12px 10px;">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <span style="font-weight:600; width:45px;">${probPct}</span>
+                            <div class="progress-bar" style="height:6px; flex:1; margin:0; background:rgba(255,255,255,0.05);">
+                                <div class="progress-fill" style="width: ${probPct}; background:var(--gradient-primary);"></div>
+                            </div>
+                        </div>
+                    </td>
+                    <td style="padding: 12px 10px; ${verdictClass}">${verdict}</td>
+                </tr>
+            `;
+        }).join('');
+        
+    } catch (error) {
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="6" style="padding: 20px; text-align: center; color: var(--accent-red);">Failed to fetch ML predictions.</td>
+            </tr>
+        `;
+    }
+}
+
+async function loadOSConcepts() {
+    const container = document.getElementById('osConceptsContainer');
+    if (!container) return;
+    
+    try {
+        const concepts = await API.get('/api/analytics/os-concepts');
+        container.innerHTML = concepts.map(item => `
+            <div class="glass-card" style="padding: 18px; display:flex; flex-direction:column; gap:10px;">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    <div style="width:36px; height:36px; border-radius:var(--radius-md); background:rgba(102,126,234,0.1); display:flex; align-items:center; justify-content:center; font-size:18px;">
+                        ${item.icon}
+                    </div>
+                    <div>
+                        <h4 style="font-family:'Outfit',sans-serif; font-size:14px; font-weight:600; color:var(--text-primary);">${item.concept}</h4>
+                        <span style="font-size:10px; font-weight:600; text-transform:uppercase; color:var(--primary-light);">${item.feature}</span>
+                    </div>
+                </div>
+                <p style="font-size:12px; color:var(--text-secondary); line-height:1.4;">${item.description}</p>
+            </div>
+        `).join('');
+    } catch (error) {
+        container.innerHTML = `<p style="color:var(--accent-red); font-size:13px; grid-column:span 3;">Failed to load OS concepts.</p>`;
+    }
+}
+
+function setupMLTrainButton() {
+    const btn = document.getElementById('btnTrainModel');
+    if (!btn) return;
+    
+    btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        btn.innerHTML = '🧠 Training...';
+        UI.showToast('Training Random Forest model on access logs...', 'info');
+        try {
+            const res = await API.post('/api/analytics/train-model');
+            if (res.success) {
+                UI.showToast('ML Model successfully trained and saved!', 'success');
+                loadMLPredictions();
+            } else {
+                UI.showToast('Training deferred. Not enough activity logs (<50 rows).', 'warning');
+            }
+        } catch (err) {
+            // Handled
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '🧠 Train ML Model';
+        }
+    });
+}
+</script>
+{% endblock %}

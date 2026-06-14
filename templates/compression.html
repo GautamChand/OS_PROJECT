@@ -1,0 +1,506 @@
+{% extends 'base.html' %}
+
+{% block title %}Compression Workspace{% endblock %}
+
+{% block content %}
+<div class="page-header animate-fade-in">
+    <div>
+        <h1 class="page-title">Compression Workspace</h1>
+        <p class="page-subtitle">Inspect local files, run benchmarks, execute individual compressions, and view the OS Priority Queue</p>
+    </div>
+    <div class="header-actions">
+        <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle Dark/Light Mode">
+            <span class="icon-sun">☀️</span>
+            <span class="icon-moon">🌙</span>
+        </button>
+        <button class="btn btn-primary" id="btnCompressBatch">⚡ Bulk Optimize</button>
+    </div>
+</div>
+
+<!-- Bulk and Filtering Toolbar -->
+<div class="glass-card" style="margin-bottom: 24px; padding: 16px 20px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+    <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+        <span style="font-weight:600; font-size:13px; color:var(--text-secondary);">Filter Temperature:</span>
+        <button class="btn btn-secondary btn-sm active-filter" onclick="filterByTemp(null, this)">All</button>
+        <button class="btn btn-secondary btn-sm" onclick="filterByTemp('hot', this)">🔴 Hot</button>
+        <button class="btn btn-secondary btn-sm" onclick="filterByTemp('warm', this)">🟠 Warm</button>
+        <button class="btn btn-secondary btn-sm" onclick="filterByTemp('cold', this)">🔵 Cold</button>
+        <button class="btn btn-secondary btn-sm" onclick="filterByTemp('archive', this)">⚪ Archive</button>
+    </div>
+    <div style="display:flex; align-items:center; gap:10px;">
+        <input type="text" id="fileSearch" placeholder="🔍 Search files..." 
+               style="padding:8px 12px; border-radius:var(--radius-md); border:1px solid var(--border-glass); background:var(--bg-input); color:var(--text-primary); font-size:13px;"
+               oninput="searchFiles(this.value)">
+    </div>
+</div>
+
+<div class="dashboard-grid" style="grid-template-columns: 2fr 1fr; margin-bottom: 28px;">
+    <!-- Left Column: File Browser -->
+    <div class="glass-card" style="padding: 20px; display:flex; flex-direction:column;">
+        <h3 class="card-title" style="margin-bottom:15px;">📁 File Browser</h3>
+        
+        <div style="overflow-x: auto; flex:1;">
+            <table class="file-table" style="width: 100%; border-collapse: collapse; text-align: left; font-size: 13px;">
+                <thead>
+                    <tr style="border-bottom: 1px solid var(--border-glass); color: var(--text-secondary); cursor: pointer;">
+                        <th onclick="sortTable('filename')" style="padding: 12px 10px;">Name ⇅</th>
+                        <th onclick="sortTable('original_size')" style="padding: 12px 10px;">Size ⇅</th>
+                        <th onclick="sortTable('temperature')" style="padding: 12px 10px;">Heat ⇅</th>
+                        <th onclick="sortTable('access_count')" style="padding: 12px 10px;">Accesses ⇅</th>
+                        <th onclick="sortTable('priority_score')" style="padding: 12px 10px;">OS Priority ⇅</th>
+                        <th style="padding: 12px 10px; text-align:right;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="filesTableBody">
+                    <tr>
+                        <td colspan="6" style="padding:20px; text-align:center; color:var(--text-muted);">Loading files...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <!-- Right Column: Priority Queue & Active State -->
+    <div style="display:flex; flex-direction:column; gap:24px;">
+        <!-- OS Priority Queue Visualization -->
+        <div class="glass-card" style="min-height:300px; display:flex; flex-direction:column;">
+            <div class="card-header">
+                <div>
+                    <h3 class="card-title">⚙️ OS Compression Queue</h3>
+                    <p class="card-subtitle">Min-heap sorting files based on size, frequency, and recency</p>
+                </div>
+            </div>
+            <div id="queueContainer" style="flex:1; overflow-y:auto; padding-right:2px; max-height:260px;">
+                <div style="text-align:center; padding:20px; color:var(--text-muted);">Queue is empty.</div>
+            </div>
+        </div>
+        
+        <!-- Algorithm Details -->
+        <div class="glass-card">
+            <h3 class="card-title" style="margin-bottom:12px;">🗜️ Supported Algorithms</h3>
+            <ul style="padding-left:20px; font-size:12.5px; color:var(--text-secondary); display:flex; flex-direction:column; gap:8px;">
+                <li><strong>Huffman (Custom)</strong>: Binary tree symbol-reduction logic. Best for text files.</li>
+                <li><strong>zlib</strong>: General-purpose compression based on DEFLATE. Fast and highly compatible.</li>
+                <li><strong>bz2</strong>: Burrows-Wheeler block sorting logic. Exceptional ratios but higher CPU load.</li>
+                <li><strong>Auto Selection</strong>: Measures type, size, and benchmarks to dynamically pick the best algorithm.</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Benchmark Algorithm Comparison -->
+<div class="modal-backdrop" id="benchmarkModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000; backdrop-filter:blur(4px); justify-content:center; align-items:center;">
+    <div class="glass-card modal-content" style="max-width: 650px; width: 90%; margin:auto;">
+        <div class="card-header">
+            <div>
+                <h3 class="card-title" id="benchmarkTitle">File Benchmarks</h3>
+                <p class="card-subtitle">Benchmarking compression engines on this file</p>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="closeBenchmarkModal()">×</button>
+        </div>
+        <div style="margin-top: 15px;">
+            <div style="height: 200px; position:relative; margin-bottom:20px;">
+                <canvas id="benchmarkChartCanvas"></canvas>
+            </div>
+            <div style="overflow-x:auto;">
+                <table style="width:100%; border-collapse:collapse; font-size:12.5px; text-align:left;">
+                    <thead>
+                        <tr style="border-bottom:1px solid var(--border-glass); color:var(--text-secondary);">
+                            <th style="padding:8px 4px;">Algorithm</th>
+                            <th style="padding:8px 4px;">Compressed Size</th>
+                            <th style="padding:8px 4px;">Savings</th>
+                            <th style="padding:8px 4px;">Duration</th>
+                            <th style="padding:8px 4px; text-align:right;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="benchmarkTableBody">
+                        <!-- Filled dynamically -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Bulk Compression Options -->
+<div class="modal-backdrop" id="bulkModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.6); z-index:1000; backdrop-filter:blur(4px); justify-content:center; align-items:center;">
+    <div class="glass-card modal-content" style="max-width: 450px; width: 90%; margin:auto;">
+        <div class="card-header">
+            <div>
+                <h3 class="card-title">Bulk Compress Files</h3>
+                <p class="card-subtitle">Choose compression options for batch processing</p>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="closeBulkModal()">×</button>
+        </div>
+        <div style="margin-top: 15px; display:flex; flex-direction:column; gap:16px;">
+            <div class="form-group">
+                <label style="font-size:12.5px; font-weight:600; display:block; margin-bottom:6px; color:var(--text-secondary);">Target Temperature Layer</label>
+                <select id="bulkTargetTemp" style="width:100%; padding:10px; border-radius:var(--radius-md); border:1px solid var(--border-glass); background:var(--bg-input); color:var(--text-primary);">
+                    <option value="archive">Archive Layer (Not accessed in 30+ days)</option>
+                    <option value="cold" selected>Cold Layer (Rarely accessed, 1-30 days)</option>
+                    <option value="warm">Warm Layer (Occasionally accessed, 1-7 days)</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label style="font-size:12.5px; font-weight:600; display:block; margin-bottom:6px; color:var(--text-secondary);">Algorithm Strategy</label>
+                <select id="bulkAlgorithm" style="width:100%; padding:10px; border-radius:var(--radius-md); border:1px solid var(--border-glass); background:var(--bg-input); color:var(--text-primary);">
+                    <option value="auto">Auto (Choose best for each file type)</option>
+                    <option value="zlib">zlib (Fast, normal ratio)</option>
+                    <option value="bz2">bz2 (High ratio, slower)</option>
+                    <option value="huffman">Huffman (Custom Tree, best for text)</option>
+                </select>
+            </div>
+            
+            <div style="display:flex; justify-content:flex-end; gap:10px;">
+                <button class="btn btn-secondary" onclick="closeBulkModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="executeBulkCompress()">Run Batch Compress</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/charts.js') }}"></script>
+<script>
+let filesData = [];
+let currentFilter = null;
+let currentSearch = '';
+let currentSort = 'filename';
+let currentOrder = 'asc';
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadFiles();
+    loadQueue();
+    setInterval(loadQueue, 15000); // refresh queue every 15 seconds
+    
+    // Set up batch button click
+    const btnBatch = document.getElementById('btnCompressBatch');
+    if (btnBatch) {
+        btnBatch.addEventListener('click', () => {
+            document.getElementById('bulkModal').style.display = 'flex';
+        });
+    }
+});
+
+async function loadFiles() {
+    try {
+        const url = `/api/folders/files?sort=${currentSort}&order=${currentOrder}${currentFilter ? `&temperature=${currentFilter}` : ''}`;
+        const data = await API.get(url);
+        filesData = data;
+        renderFilesTable();
+    } catch (error) {
+        console.error("Error loading files:", error);
+    }
+}
+
+function renderFilesTable() {
+    const tableBody = document.getElementById('filesTableBody');
+    if (!tableBody) return;
+    
+    let filtered = filesData;
+    if (currentSearch) {
+        const q = currentSearch.toLowerCase();
+        filtered = filesData.filter(f => f.filename.toLowerCase().includes(q));
+    }
+    
+    if (filtered.length === 0) {
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="6" style="padding: 20px; text-align: center; color: var(--text-muted);">No matching files found.</td>
+            </tr>
+        `;
+        return;
+    }
+    
+    tableBody.innerHTML = filtered.map(file => {
+        const sizeStr = file.is_compressed 
+            ? `${UI.formatBytes(file.compressed_size)} <span style="font-size:10px; color:var(--accent-green);">(-${((1 - file.compression_ratio) * 100).toFixed(1)}%)</span>`
+            : UI.formatBytes(file.original_size);
+            
+        let tempClass = file.temperature || 'warm';
+        let actionBtn = '';
+        
+        if (file.is_compressed) {
+            actionBtn = `<button class="btn btn-secondary btn-sm" onclick="decompressFile(${file.id})">🔓 Decompress</button>`;
+        } else {
+            actionBtn = `
+                <div style="display:inline-flex; gap:4px;">
+                    <button class="btn btn-primary btn-sm" onclick="compressFileSingle(${file.id}, 'auto')">🗜️ Compress</button>
+                    <div style="position:relative; display:inline-block;">
+                        <button class="btn btn-secondary btn-sm" onclick="toggleDropdown(this)">⋮</button>
+                        <div class="dropdown-menu" style="display:none; position:absolute; right:0; top:32px; background:var(--bg-card); border:1px solid var(--border-glass); border-radius:var(--radius-md); z-index:10; width:150px; box-shadow:var(--shadow-md);">
+                            <button onclick="compressFileSingle(${file.id}, 'zlib')" style="width:100%; padding:8px 12px; text-align:left; border:none; background:none; color:var(--text-primary); cursor:pointer;">Use zlib</button>
+                            <button onclick="compressFileSingle(${file.id}, 'bz2')" style="width:100%; padding:8px 12px; text-align:left; border:none; background:none; color:var(--text-primary); cursor:pointer;">Use bz2</button>
+                            <button onclick="compressFileSingle(${file.id}, 'huffman')" style="width:100%; padding:8px 12px; text-align:left; border:none; background:none; color:var(--text-primary); cursor:pointer;">Use Huffman</button>
+                            <button onclick="openBenchmark(${file.id})" style="width:100%; padding:8px 12px; text-align:left; border:none; background:none; color:var(--primary-light); font-weight:600; cursor:pointer;">📊 Benchmark</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        return `
+            <tr style="border-bottom: 1px solid var(--border-subtle); hover: background-color: var(--bg-glass-hover);">
+                <td style="padding: 12px 10px; font-weight:500;">
+                    <div style="display:flex; flex-direction:column;">
+                        <span style="font-family: 'JetBrains Mono', monospace; font-size:12.5px;">${file.filename}</span>
+                        ${file.is_compressed ? `<span style="font-size:10.5px; color:var(--text-muted);">Alg: ${file.compression_algorithm}</span>` : ''}
+                    </div>
+                </td>
+                <td style="padding: 12px 10px;">${sizeStr}</td>
+                <td style="padding: 12px 10px;"><span class="temp-badge ${tempClass}">${tempClass}</span></td>
+                <td style="padding: 12px 10px; text-align:center;">${file.access_count}</td>
+                <td style="padding: 12px 10px; font-family:'JetBrains Mono'; font-weight:600;">${file.priority_score.toFixed(2)}</td>
+                <td style="padding: 12px 10px; text-align:right;">${actionBtn}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+async function loadQueue() {
+    const queueContainer = document.getElementById('queueContainer');
+    if (!queueContainer) return;
+    
+    try {
+        const queue = await API.get('/api/compress/queue');
+        
+        if (!queue || queue.length === 0) {
+            queueContainer.innerHTML = `
+                <div style="text-align:center; padding:30px; color:var(--text-muted);">
+                    <p style="font-size:32px;">🗂️</p>
+                    <p style="font-size:12px; margin-top:6px;">No tasks in scheduler queue</p>
+                </div>
+            `;
+            return;
+        }
+        
+        queueContainer.innerHTML = `
+            <div style="display:flex; flex-direction:column; gap:10px; margin-top:10px;">
+                ${queue.map((task, idx) => `
+                    <div class="glass-card" style="padding:12px; display:flex; justify-content:space-between; align-items:center;">
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <span style="font-family:'Outfit'; font-weight:700; color:var(--primary-light); font-size:14px;">#${idx+1}</span>
+                            <div>
+                                <p style="font-weight:600; font-family:'JetBrains Mono'; font-size:12px; margin:0;">${task.filename}</p>
+                                <span style="font-size:10px; color:var(--text-muted);">Score: ${task.priority.toFixed(2)} | Category: ${task.category}</span>
+                            </div>
+                        </div>
+                        <span class="temp-badge ${task.temperature}" style="font-size:9px; padding:2px 8px;">${task.temperature}</span>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    } catch (error) {
+        console.error("Error loading queue:", error);
+    }
+}
+
+function filterByTemp(temp, element) {
+    currentFilter = temp;
+    // Update active state in filters
+    document.querySelectorAll('.active-filter').forEach(el => el.classList.remove('active-filter'));
+    if (element) {
+        element.classList.add('active-filter');
+    }
+    loadFiles();
+}
+
+function searchFiles(query) {
+    currentSearch = query;
+    renderFilesTable();
+}
+
+function sortTable(column) {
+    if (currentSort === column) {
+        currentOrder = currentOrder === 'asc' ? 'desc' : 'asc';
+    } else {
+        currentSort = column;
+        currentOrder = 'asc';
+    }
+    loadFiles();
+}
+
+function toggleDropdown(button) {
+    const menu = button.nextElementSibling;
+    // Hide all other dropdowns
+    document.querySelectorAll('.dropdown-menu').forEach(el => {
+        if (el !== menu) el.style.display = 'none';
+    });
+    menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+    
+    // Close dropdown on click outside
+    const clickHandler = (e) => {
+        if (!button.contains(e.target) && !menu.contains(e.target)) {
+            menu.style.display = 'none';
+            document.removeEventListener('click', clickHandler);
+        }
+    };
+    document.addEventListener('click', clickHandler);
+}
+
+async function compressFileSingle(fileId, algorithm) {
+    UI.showToast(`Initiating compression...`, 'info');
+    try {
+        const res = await API.post('/api/compress/file', { file_id: fileId, algorithm });
+        if (res.success) {
+            UI.showToast(`Compressed successfully with ${res.result.algorithm}! Savings: ${UI.formatBytes(res.result.original_size - res.result.compressed_size)}`, 'success');
+            loadFiles();
+            loadQueue();
+        }
+    } catch (err) {}
+}
+
+async function decompressFile(fileId) {
+    UI.showToast('Initiating decompression...', 'info');
+    try {
+        const res = await API.post('/api/compress/decompress', { file_id: fileId });
+        if (res.success) {
+            UI.showToast(`Decompressed file successfully! Duration: ${res.result.duration_ms.toFixed(1)}ms`, 'success');
+            loadFiles();
+            loadQueue();
+        }
+    } catch (err) {}
+}
+
+async function openBenchmark(fileId) {
+    const modal = document.getElementById('benchmarkModal');
+    modal.style.display = 'flex';
+    
+    const tableBody = document.getElementById('benchmarkTableBody');
+    tableBody.innerHTML = `
+        <tr>
+            <td colspan="5" style="padding:20px; text-align:center; color:var(--text-muted);">Running benchmarks on zlib, bz2 and Huffman... Please wait.</td>
+        </tr>
+    `;
+    
+    try {
+        const res = await API.get(`/api/compress/benchmark/${fileId}`);
+        document.getElementById('benchmarkTitle').innerText = `Benchmarks: ${res.filename}`;
+        
+        const algs = Object.keys(res.results);
+        const sizes = algs.map(alg => res.results[alg].compressed_size);
+        const durations = algs.map(alg => res.results[alg].duration_ms);
+        const savings = algs.map(alg => res.results[alg].savings_bytes);
+        
+        // Update Table
+        tableBody.innerHTML = algs.map(alg => {
+            const result = res.results[alg];
+            const isBest = result.is_best ? '🌟 Best' : '';
+            const savingsPercent = ((result.savings_bytes / res.original_size) * 100).toFixed(1) + '%';
+            
+            return `
+                <tr style="border-bottom:1px solid var(--border-subtle); font-weight:${result.is_best ? 'bold' : 'normal'}">
+                    <td style="padding:10px 4px; text-transform:capitalize;">${alg} ${isBest ? `<span style="color:var(--accent-orange); font-size:11px;">${isBest}</span>` : ''}</td>
+                    <td style="padding:10px 4px;">${UI.formatBytes(result.compressed_size)}</td>
+                    <td style="padding:10px 4px; color:var(--accent-green);">${UI.formatBytes(result.savings_bytes)} (${savingsPercent})</td>
+                    <td style="padding:10px 4px;">${result.duration_ms.toFixed(2)}ms</td>
+                    <td style="padding:10px 4px; text-align:right;">
+                        <button class="btn btn-primary btn-sm" onclick="closeBenchmarkModal(); compressFileSingle(${fileId}, '${alg}')">Apply</button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+        
+        // Render Benchmark Chart
+        if (typeof ChartRegistry['benchmarkChartCanvas'] !== 'undefined') {
+            ChartRegistry['benchmarkChartCanvas'].destroy();
+        }
+        
+        const colors = getChartColors();
+        const ctx = document.getElementById('benchmarkChartCanvas');
+        
+        const chart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: algs.map(a => a.toUpperCase()),
+                datasets: [
+                    {
+                        label: 'Compressed Size (Bytes)',
+                        data: sizes,
+                        backgroundColor: 'rgba(102, 126, 234, 0.6)',
+                        borderColor: '#667eea',
+                        borderWidth: 1,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'Duration (ms)',
+                        data: durations,
+                        backgroundColor: 'rgba(245, 158, 11, 0.6)',
+                        borderColor: '#f59e0b',
+                        borderWidth: 1,
+                        yAxisID: 'y1'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { labels: { color: colors.text, font: colors.fonts } }
+                },
+                scales: {
+                    x: { ticks: { color: colors.text, font: colors.fonts } },
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        ticks: { color: colors.text, font: colors.fonts },
+                        grid: { color: colors.grid },
+                        title: { display: true, text: 'Size (Bytes)', color: colors.text }
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        ticks: { color: colors.text, font: colors.fonts },
+                        grid: { drawOnChartArea: false }, // avoid overlapping grid lines
+                        title: { display: true, text: 'Time (ms)', color: colors.text }
+                    }
+                }
+            }
+        });
+        
+        ChartRegistry['benchmarkChartCanvas'] = chart;
+        
+    } catch (error) {
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="5" style="padding:20px; text-align:center; color:var(--accent-red);">Benchmark run failed.</td>
+            </tr>
+        `;
+    }
+}
+
+function closeBenchmarkModal() {
+    document.getElementById('benchmarkModal').style.display = 'none';
+}
+
+function closeBulkModal() {
+    document.getElementById('bulkModal').style.display = 'none';
+}
+
+async function executeBulkCompress() {
+    closeBulkModal();
+    const temp = document.getElementById('bulkTargetTemp').value;
+    const alg = document.getElementById('bulkAlgorithm').value;
+    
+    UI.showToast(`Batch compression started for "${temp}" files...`, 'info');
+    try {
+        const res = await API.post('/api/compress/batch', { temperature: temp, algorithm: alg });
+        UI.showToast(`Batch compression finished! Compressed: ${res.compressed}, Failed: ${res.failed}`, 'success');
+        loadFiles();
+        loadQueue();
+    } catch (err) {}
+}
+</script>
+<style>
+/* CSS Styles for active filter button */
+.active-filter {
+    background: var(--gradient-primary) !important;
+    color: white !important;
+    border-color: transparent !important;
+}
+</style>
+{% endblock %}
