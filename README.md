@@ -107,13 +107,13 @@ Analytics Dashboard
 
 ### Storage Optimizer Dashboard
 
-![Dashboard](UI_osproject.png)
+![Dashboard](asset/UI_osproject.png)
 
 ---
 
 ### Smart Compression Recommendations
 
-![Recommendations](assest/recommendation_osproject.png)
+![Recommendations](asset/recommendation_osproject.png)
 
 ---
 
