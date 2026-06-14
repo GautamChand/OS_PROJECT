@@ -107,31 +107,31 @@ Analytics Dashboard
 
 ### Storage Optimizer Dashboard
 
-![Dashboard](assets/dashboard.png)
+![Dashboard](UI_osproject.png)
 
 ---
 
 ### Smart Compression Recommendations
 
-![Recommendations](assets/recommendations.png)
+![Recommendations](assest/recommendation_osproject.png)
 
 ---
 
 ### Advanced Analytics
 
-![Analytics](assets/analytics.png)
+![Analytics](asset/storageanalysis_Osproject.png)
 
 ---
 
 ### Machine Learning Access Predictions
 
-![ML Predictions](assets/ml_predictions.png)
+![ML Predictions](asset/randomforest_os.png)
 
 ---
 
 ### Compression Workspace
 
-![Compression Workspace](assets/compression_workspace.png)
+![Compression Workspace](asset/compression_workspace.png)
 
 ---
 
